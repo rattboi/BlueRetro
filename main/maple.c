@@ -12,9 +12,7 @@
 #include <esp32/dport_access.h>
 #include <esp_intr_alloc.h>
 #include "driver/gpio.h"
-#include "../zephyr/types.h"
-#include "../util.h"
-#include "../adapter/adapter.h"
+#include <stdint.h>
 #include "maple.h"
 
 #define ID_CTRL    0x00000001
@@ -24,7 +22,6 @@
 #define ID_MIC     0x00000010
 #define ID_KB      0x00000040
 #define ID_GUN     0x00000080
-#define ID_RUMBLE  0x00000100
 #define ID_MOUSE   0x00000200
 
 #define CMD_INFO_REQ      0x01
@@ -55,6 +52,26 @@
 
 #define wait_100ns() asm("nop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\n");
 #define maple_fix_byte(s, a, b) (s ? ((a << s) | (b >> (8 - s))) : b)
+
+
+/* Evaluates to 0 if cond is true-ish; compile error otherwise */
+#define ZERO_OR_COMPILE_ERROR(cond) ((int) sizeof(char[1 - 2 * !(cond)]) - 1)
+
+/* Evaluates to 0 if array is an array; compile error if not array (e.g.
+ * pointer)
+ */
+#define IS_ARRAY(array)                                     \
+    ZERO_OR_COMPILE_ERROR(                                  \
+        !__builtin_types_compatible_p(__typeof__(array),    \
+                          __typeof__(&(array)[0])))
+
+/* Evaluates to number of elements in an array; compile error if not
+ * an array (e.g. pointer)
+ */
+#define ARRAY_SIZE(array)               \
+    ((unsigned long) (IS_ARRAY(array) + \
+        (sizeof(array) / sizeof((array)[0]))))
+
 
 uint32_t dummy_data[2];
 
@@ -97,11 +114,6 @@ static const uint8_t ctrl_area_dir_name[] = {
     0x6C, 0x6C, 0x6F, 0x72, 0x20, 0x20, 0x72, 0x65, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20,
 };
 
-static const uint8_t rumble_area_dir_name[] = {
-    0x72, 0x44, 0x00, 0xFF, 0x63, 0x6D, 0x61, 0x65, 0x20, 0x74, 0x73, 0x61, 0x74, 0x6E, 0x6F, 0x43,
-    0x6C, 0x6C, 0x6F, 0x72, 0x20, 0x20, 0x72, 0x65, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20,
-};
-
 static const uint8_t brand[] = {
     0x64, 0x6F, 0x72, 0x50, 0x64, 0x65, 0x63, 0x75, 0x20, 0x79, 0x42, 0x20, 0x55, 0x20, 0x72, 0x6F,
     0x72, 0x65, 0x64, 0x6E, 0x63, 0x69, 0x4C, 0x20, 0x65, 0x73, 0x6E, 0x65, 0x6F, 0x72, 0x46, 0x20,
@@ -110,8 +122,6 @@ static const uint8_t brand[] = {
 };
 
 static struct maple_pkt pkt;
-static uint32_t rumble_max = 0x00020013;
-static uint32_t rumble_val = 0x10E0073B;
 
 static void IRAM_ATTR maple_tx(uint32_t port, uint32_t maple0, uint32_t maple1, uint8_t *data, uint8_t len) {
     uint8_t *crc = data + (len - 1);
