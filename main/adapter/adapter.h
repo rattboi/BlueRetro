@@ -21,45 +21,10 @@
 #define ADAPTER_MAX_AXES 6
 #define REPORT_MAX_USAGE 16
 
-/* BT device ID */
-enum {
-    BT_NONE = -1,
-    HID_GENERIC,
-    PS3_DS3,
-    WII_CORE,
-    WII_NUNCHUCK,
-    WII_CLASSIC,
-    WIIU_PRO,
-    PS4_DS4,
-    XB1_S,
-    XB1_ADAPTIVE,
-    SW,
-    BT_MAX,
-};
-
 /* Wired system ID */
 enum {
     WIRED_NONE = -1,
-    WIRED_AUTO,
-    PARALLEL_1P,
-    PARALLEL_2P,
-    NES,
-    PCE,
-    GENESIS,
-    SNES,
-    CDI,
-    CD32,
-    REAL_3DO,
-    JAGUAR,
-    PSX,
-    SATURN,
-    PCFX,
-    N64,
     DC,
-    PS2,
-    GC,
-    WII_EXT,
-    EXP_BOARD,
     WIRED_MAX,
 };
 
