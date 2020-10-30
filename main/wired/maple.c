@@ -15,7 +15,6 @@
 #include "../zephyr/types.h"
 #include "../util.h"
 #include "../adapter/adapter.h"
-#include "../adapter/config.h"
 #include "maple.h"
 
 #define ID_CTRL    0x00000001
@@ -46,12 +45,9 @@
 
 #define ADDR_MASK   0x3F
 #define ADDR_CTRL   0x20
-#define ADDR_MEM    0x01
-#define ADDR_RUMBLE 0x02
 
 #define DESC_CTRL     0x000F06FE
 #define DESC_CTRL_ALT 0x003FFFFF
-#define DESC_RUMBLE   0x01010000
 
 //#define WIRED_TRACE
 #define DEBUG  (1ULL << 25)
@@ -350,9 +346,6 @@ maple_end:
         switch(src & ADDR_MASK) {
             case ADDR_CTRL:
                 pkt.src = src;
-                if (config.out_cfg[port].acc_mode & ACC_RUMBLE) {
-                    pkt.src |= ADDR_RUMBLE;
-                }
                 pkt.dst = dst;
                 switch (cmd) {
                     case CMD_INFO_REQ:
@@ -373,83 +366,20 @@ maple_end:
                         pkt.len = 3;
                         pkt.cmd = CMD_DATA_TX;
                         pkt.data32[0] = ID_CTRL;
-                        //memcpy((void *)&pkt.data32[1], wired_adapter.data[port].output, sizeof(uint32_t) * 2);
                         pkt.data32[1] = dummy_data[0]++;
                         pkt.data32[2] = dummy_data[1]++;
                         maple_tx(port, maple0, maple1, pkt.data, pkt.len * 4 + 5);
-                        ++wired_adapter.data[port].frame_cnt;
                         ets_printf("%02X %02X: cmd: 0x%02X, %02X\n", src, dst, cmd, port);
                         break;
                     case CMD_SEND_SERIAL_STRING:
                         ets_printf("%02X %02X: cmd: 0x%02X, %02X, %s\n", src, dst, cmd, port, &pkt.data[4]);
-        uint8_t data[545];
                         pkt.len = 1;
                         pkt.cmd = CMD_DATA_TX;
                         pkt.data32[0] = ID_CTRL;
                         maple_tx(port, maple0, maple1, pkt.data, pkt.len * 4 + 5);
-                        ++wired_adapter.data[port].frame_cnt;
                         break;
                     default:
                         ets_printf("%02X %02X: Unk cmd: 0x%02X, %02X\n", src, dst, cmd, port);
-                        break;
-                }
-                break;
-            case ADDR_RUMBLE:
-                pkt.src = src;
-                pkt.dst = dst;
-                switch (cmd) {
-                    case CMD_INFO_REQ:
-                        pkt.len = 28;
-                        pkt.cmd = CMD_INFO_RSP;
-                        pkt.data32[0] = ID_RUMBLE;
-                        pkt.data32[1] = DESC_RUMBLE;
-                        pkt.data32[2] = 0;
-                        pkt.data32[3] = 0;
-                        memcpy((void *)&pkt.data32[4], rumble_area_dir_name, sizeof(rumble_area_dir_name));
-                        memcpy((void *)&pkt.data32[12], brand, sizeof(brand));
-                        pkt.data32[27] = 0x4006;
-                        pkt.data32[27] |= 0xC800 << 16;
-                        maple_tx(port, maple0, maple1, pkt.data, pkt.len * 4 + 5);
-                        break;
-                    case CMD_GET_CONDITION:
-                    case CMD_MEM_INFO_REQ:
-                        pkt.len = 0x02;
-                        pkt.cmd = CMD_DATA_TX;
-                        pkt.data32[0] = ID_RUMBLE;
-                        pkt.data32[1] = rumble_val;
-                        maple_tx(port, maple0, maple1, pkt.data, pkt.len * 4 + 5);
-                        break;
-                    case CMD_BLOCK_READ:
-                        pkt.len = 0x03;
-                        pkt.cmd = CMD_DATA_TX;
-                        pkt.data32[0] = ID_RUMBLE;
-                        pkt.data32[1] = 0;
-                        pkt.data32[2] = rumble_max;
-                        maple_tx(port, maple0, maple1, pkt.data, pkt.len * 4 + 5);
-                        break;
-                    case CMD_BLOCK_WRITE:
-                        pkt.len = 0x00;
-                        pkt.cmd = CMD_ACK;
-                        maple_tx(port, maple0, maple1, pkt.data, pkt.len * 4 + 5);
-                        if (!bad_frame) {
-                            rumble_max = pkt.data32[2];
-                        }
-                        break;
-                    case CMD_SET_CONDITION:
-                        pkt.len = 0x00;
-                        pkt.cmd = CMD_ACK;
-                        maple_tx(port, maple0, maple1, pkt.data, pkt.len * 4 + 5);
-                        if (!bad_frame) {
-                            rumble_val = pkt.data32[1];
-                            if (config.out_cfg[port].acc_mode & ACC_RUMBLE) {
-                                pkt.data[3] = port;
-                                *(uint32_t *)&pkt.data[4] = rumble_max;
-                                adapter_q_fb(pkt.data + 3, 9);
-                            }
-                        }
-                        break;
-                    default:
-                        ets_printf("%02X: Unk cmd: 0x%02X\n", dst, cmd);
                         break;
                 }
                 break;
@@ -476,18 +406,6 @@ void maple_init(void)
             gpio_config(&io_conf[i][j]);
         }
     }
-
-#if 0
-    gpio_config_t io_conf2 = {
-        .intr_type = 0,
-        .pin_bit_mask = DEBUG,
-        .mode = GPIO_MODE_OUTPUT,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .pull_up_en = GPIO_PULLUP_ENABLE
-    };
-    gpio_config(&io_conf2);
-    GPIO.out_w1ts = DEBUG;
-#endif
 
     printf("Maple Init: Enabling interrupt\n");
     esp_intr_alloc(ETS_GPIO_INTR_SOURCE, ESP_INTR_FLAG_LEVEL3, maple_rx, NULL, NULL);
